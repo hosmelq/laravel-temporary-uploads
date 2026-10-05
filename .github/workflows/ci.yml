@@ -1,0 +1,142 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  check-unused-composer-dependencies:
+    name: Check unused composer dependencies
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Check unused composer dependencies
+        uses: hosmelq/.github/.github/actions/composer-unused-dependencies-check@32f4a95b53649f1634b195193a61bb56a6b26d50
+        with:
+          php-version: '8.4'
+
+  check-composer:
+    name: Check composer
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Check composer normalize
+        uses: hosmelq/.github/.github/actions/composer-normalize-check@32f4a95b53649f1634b195193a61bb56a6b26d50
+        with:
+          php-version: '8.4'
+
+  check-static-code:
+    name: Check static code
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Check static code
+        uses: hosmelq/.github/.github/actions/phpstan-check@32f4a95b53649f1634b195193a61bb56a6b26d50
+        with:
+          php-version: '8.4'
+
+  check-code-quality:
+    name: Check code quality
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Check code quality
+        uses: hosmelq/.github/.github/actions/php-rector-check@32f4a95b53649f1634b195193a61bb56a6b26d50
+        with:
+          php-version: '8.4'
+
+  check-code-style:
+    name: Check code style
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Check code style
+        uses: hosmelq/.github/.github/actions/php-pint-check@32f4a95b53649f1634b195193a61bb56a6b26d50
+        with:
+          php-version: '8.4'
+
+  tests:
+    name: PHP ${{ matrix.php }} - Laravel ${{ matrix.laravel }} - ${{ matrix.stability }}
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+        laravel: ['12.*', '13.*']
+        stability: [prefer-stable]
+        include:
+          - laravel: 12.*
+            testbench: 10.*
+          - laravel: 13.*
+            testbench: 11.*
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install composer dependencies
+        uses: hosmelq/.github/.github/actions/composer-install@32f4a95b53649f1634b195193a61bb56a6b26d50
+        with:
+          php-version: ${{ matrix.php }}
+
+      - name: Installed dependencies
+        run: composer show -D
+
+      - name: Setup problem matchers
+        run: |
+          echo "::add-matcher::${{ runner.tool_cache }}/php.json"
+          echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
+
+      - name: Install composer matrix dependencies
+        run: |
+          if [ '${{ matrix.laravel }}' = '12.*' ]; then
+            composer remove --dev pestphp/pest-plugin-agent pestphp/pest-plugin-rector --no-interaction --no-update
+            composer require --dev 'pestphp/pest:^4.0' --no-interaction --no-update
+          fi
+          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
+          composer update --${{ matrix.stability }} --prefer-dist --no-interaction
+
+      - name: Run tests
+        run: composer test

@@ -1,0 +1,5 @@
+console:
+  namespace: HosmelQ\TemporaryUploads\Commands
+
+namespace: HosmelQ\TemporaryUploads
+preset: package

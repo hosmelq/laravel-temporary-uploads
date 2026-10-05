@@ -1,0 +1,5 @@
+providers:
+  - HosmelQ\TemporaryUploads\TemporaryUploadsServiceProvider
+
+workbench:
+  install: false
