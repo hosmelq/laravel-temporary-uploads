@@ -3,7 +3,6 @@
     "description": "Temporary upload URLs, file retrieval, and cleanup for Laravel.",
     "license": "MIT",
     "keywords": [
-        "hosmelq",
         "laravel",
         "s3",
         "uploads"
