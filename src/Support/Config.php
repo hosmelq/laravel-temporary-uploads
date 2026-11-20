@@ -40,7 +40,9 @@ class Config
         $value = ConfigFacade::integer('temporary-uploads.retention');
 
         if ($value < 1) {
-            throw new InvalidArgumentException('The temporary upload retention must be greater than zero.');
+            throw new InvalidArgumentException(
+                'The temporary upload retention must be greater than zero.',
+            );
         }
 
         return $value;
@@ -51,10 +53,12 @@ class Config
         $value = ConfigFacade::integer('temporary-uploads.url_expiration');
 
         if ($value < 1) {
-            throw new InvalidArgumentException('The temporary upload url_expiration must be greater than zero.');
+            throw new InvalidArgumentException(
+                'The temporary upload url_expiration must be greater than zero.',
+            );
         }
 
-        if ($value > 604800) {
+        if ($value > 604_800) {
             throw new InvalidArgumentException('The upload URL lifetime cannot exceed seven days.');
         }
 

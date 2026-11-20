@@ -32,22 +32,23 @@ class TemporaryUploads
 
     public function __construct(
         private readonly FilesystemManager $filesystems,
-    ) {
-    }
+    ) {}
 
     public function create(string $filename): UploadUrl
     {
         $normalizedFilename = $this->normalizeFilename($filename);
         $originalName = base64_encode($filename);
 
-        if (mb_strlen($originalName, '8bit') + mb_strlen(self::ORIGINAL_NAME_METADATA, '8bit') > 2048) {
-            throw new InvalidArgumentException('The original filename exceeds the metadata size limit.');
+        if (mb_strlen(self::ORIGINAL_NAME_METADATA.$originalName, '8bit') > 2_048) {
+            throw new InvalidArgumentException(
+                'The original filename exceeds the metadata size limit.',
+            );
         }
 
         $path = $this->prefix().'/'.Str::ulid().'/'.$normalizedFilename;
         $filesystem = $this->filesystem();
 
-        if (mb_strlen($filesystem->path($path), '8bit') > 1024) {
+        if (mb_strlen($filesystem->path($path), '8bit') > 1_024) {
             throw new InvalidArgumentException('The temporary upload path exceeds 1024 bytes.');
         }
 
@@ -55,7 +56,6 @@ class TemporaryUploads
         $upload = $filesystem->temporaryUploadUrl($path, $expiresAt, [
             'Metadata' => [self::ORIGINAL_NAME_METADATA => $originalName],
         ]);
-
         $headers = [];
         $uploadHeaders = $upload['headers'];
         $url = $upload['url'];
@@ -108,14 +108,19 @@ class TemporaryUploads
         $count = 0;
 
         foreach ($filesystem->getDriver()->listContents($prefix, true) as $file) {
-            if (! $file instanceof FileAttributes || ! $this->isUploadPath($file->path(), $prefix)) {
+            if (
+                ! $file instanceof FileAttributes
+                || ! $this->isUploadPath($file->path(), $prefix)
+            ) {
                 continue;
             }
 
             $lastModified = $file->lastModified();
 
             if ($lastModified === null) {
-                throw new UnexpectedValueException('Storage did not return the upload modification time.');
+                throw new UnexpectedValueException(
+                    'Storage did not return the upload modification time.',
+                );
             }
 
             if ($lastModified > $cutoff) {
@@ -132,7 +137,9 @@ class TemporaryUploads
     public function retrieve(string $path): TemporaryFile
     {
         if (! $this->isUploadPath($path, $this->prefix())) {
-            throw new InvalidArgumentException('The path is not a temporary upload in the configured prefix.');
+            throw new InvalidArgumentException(
+                'The path is not a temporary upload in the configured prefix.',
+            );
         }
 
         $maximumSize = $this->maximumSize ?? Config::maxSize();
@@ -156,14 +163,20 @@ class TemporaryUploads
                 throw $s3Exception;
             }
 
-            throw new FileNotFoundException("Temporary upload [{$path}] was not found.", $s3Exception->getCode(), previous: $s3Exception);
+            throw new FileNotFoundException(
+                "Temporary upload [{$path}] was not found.",
+                $s3Exception->getCode(),
+                previous: $s3Exception,
+            );
         }
 
         $lastModified = $metadata->get('LastModified');
         $size = $metadata->get('ContentLength');
 
         if (! $lastModified instanceof DateTimeInterface || ! is_int($size) || $size < 0) {
-            throw new UnexpectedValueException('Storage returned invalid temporary upload metadata.');
+            throw new UnexpectedValueException(
+                'Storage returned invalid temporary upload metadata.',
+            );
         }
 
         if ($lastModified->getTimestamp() <= CarbonImmutable::now()->getTimestamp() - $retention) {
@@ -184,7 +197,9 @@ class TemporaryUploads
             filename: basename($path),
             filesystem: $filesystem,
             lastModified: CarbonImmutable::instance($lastModified),
-            originalName: is_string($originalName) ? $this->decodeOriginalName($originalName) : null,
+            originalName: is_string($originalName)
+                ? $this->decodeOriginalName($originalName)
+                : null,
             path: $path,
             size: $size,
         );
@@ -231,8 +246,13 @@ class TemporaryUploads
 
     private function normalizeFilename(string $filename): string
     {
-        if (! mb_check_encoding($filename, 'UTF-8') || preg_match('/[\x00-\x1F\x7F]/', $filename) === 1) {
-            throw new InvalidArgumentException('The filename must be valid UTF-8 without control characters.');
+        if (
+            ! mb_check_encoding($filename, 'UTF-8')
+            || preg_match('/[\x00-\x1F\x7F]/', $filename) === 1
+        ) {
+            throw new InvalidArgumentException(
+                'The filename must be valid UTF-8 without control characters.',
+            );
         }
 
         $name = mb_trim(basename(str_replace('\\', '/', $filename)));
@@ -255,11 +275,17 @@ class TemporaryUploads
         try {
             $normalized = new WhitespacePathNormalizer()->normalizePath($prefix);
         } catch (FilesystemException $filesystemException) {
-            throw new InvalidArgumentException('The temporary upload prefix is invalid.', $filesystemException->getCode(), previous: $filesystemException);
+            throw new InvalidArgumentException(
+                'The temporary upload prefix is invalid.',
+                $filesystemException->getCode(),
+                previous: $filesystemException,
+            );
         }
 
         if ($prefix === '' || $normalized !== $prefix) {
-            throw new InvalidArgumentException('A non-empty relative temporary upload prefix is required.');
+            throw new InvalidArgumentException(
+                'A non-empty relative temporary upload prefix is required.',
+            );
         }
 
         return $prefix;

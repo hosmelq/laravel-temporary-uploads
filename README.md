@@ -6,7 +6,7 @@ expire.
 
 ## Requirements
 
-- Laravel 12+
+- Laravel 13+
 - PHP 8.4+
 - S3-compatible Laravel filesystem disk
 

@@ -16,7 +16,12 @@ class UploadTooLargeException extends RuntimeException
         null|Throwable $previous = null,
     ) {
         parent::__construct(
-            sprintf('Temporary upload [%s] is %d bytes, exceeding the %d-byte limit.', $path, $size, $maximumSize),
+            sprintf(
+                'Temporary upload [%s] is %d bytes, exceeding the %d-byte limit.',
+                $path,
+                $size,
+                $maximumSize,
+            ),
             previous: $previous,
         );
     }

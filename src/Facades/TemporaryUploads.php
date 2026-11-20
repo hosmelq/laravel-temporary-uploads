@@ -8,6 +8,7 @@ use HosmelQ\TemporaryUploads\TemporaryFile;
 use HosmelQ\TemporaryUploads\TemporaryUploads as UploadManager;
 use HosmelQ\TemporaryUploads\UploadUrl;
 use Illuminate\Support\Facades\Facade;
+use Override;
 
 /**
  * @method static UploadUrl create(string $filename)
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\Facade;
  */
 class TemporaryUploads extends Facade
 {
+    #[Override]
     protected static function getFacadeAccessor(): string
     {
         return UploadManager::class;

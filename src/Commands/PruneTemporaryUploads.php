@@ -9,14 +9,8 @@ use Illuminate\Console\Command;
 
 class PruneTemporaryUploads extends Command
 {
-    /**
-     * @var string
-     */
     protected $description = 'Delete expired files from the temporary uploads prefix';
 
-    /**
-     * @var string
-     */
     protected $signature = 'temporary-uploads:prune';
 
     public function handle(TemporaryUploads $uploads): int

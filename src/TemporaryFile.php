@@ -17,8 +17,7 @@ final readonly class TemporaryFile
         public null|string $originalName,
         public string $path,
         public int $size,
-    ) {
-    }
+    ) {}
 
     public function contents(): string
     {
