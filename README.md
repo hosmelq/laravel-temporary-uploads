@@ -141,8 +141,11 @@ $file = TemporaryUploads::maxSize(20 * 1024 * 1024)->retrieve($path);
 
 The limit is checked when the file is retrieved, not while it uploads, so an
 oversized file can still reach storage. Set `delete_rejected_uploads` to `true`
-to delete oversized files as soon as they are rejected. Otherwise they stay in
-storage until they expire and are pruned.
+to delete oversized files as soon as they are rejected. The delete only applies
+while the file's ETag matches the one that was checked, so a replacement with a
+different ETag is kept on storage that honours conditional deletes, such as
+Amazon S3. Otherwise oversized files stay in storage until they expire and are
+pruned.
 
 ## Delete expired uploads
 

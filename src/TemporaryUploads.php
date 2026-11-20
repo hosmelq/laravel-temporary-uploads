@@ -20,8 +20,10 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use League\Flysystem\FileAttributes;
 use League\Flysystem\FilesystemException;
+use League\Flysystem\UnableToDeleteFile;
 use League\Flysystem\WhitespacePathNormalizer;
 use Safe\Exceptions\UrlException;
+use Throwable;
 use UnexpectedValueException;
 
 class TemporaryUploads
@@ -191,7 +193,7 @@ class TemporaryUploads
         }
 
         if ($size > $maximumSize) {
-            $this->rejectOversizedUpload($filesystem, $maximumSize, $path, $size);
+            $this->rejectOversizedUpload($bucket, $etag, $filesystem, $maximumSize, $path, $size);
         }
 
         $customMetadata = $metadata->get('Metadata');
@@ -222,6 +224,37 @@ class TemporaryUploads
         }
 
         return $name !== '' && mb_check_encoding($name, 'UTF-8') ? $name : null;
+    }
+
+    private function deleteInspectedUpload(
+        string $bucket,
+        string $etag,
+        AwsS3V3Adapter $filesystem,
+        string $path,
+    ): null|UnableToDeleteFile {
+        // Laravel wraps read-only disks in an adapter that refuses every delete.
+        if ((bool) ($filesystem->getConfig()['read-only'] ?? false)) {
+            return UnableToDeleteFile::atLocation($path, 'This is a readonly adapter.');
+        }
+
+        try {
+            $filesystem->getClient()->execute(
+                $filesystem->getClient()->getCommand('DeleteObject', [
+                    'Bucket' => $bucket,
+                    'IfMatch' => $etag,
+                    'Key' => $filesystem->path($path),
+                ]),
+            );
+        } catch (Throwable $throwable) {
+            // A 412 means the upload changed after it was inspected, so the replacement is kept.
+            if ($throwable instanceof S3Exception && $throwable->getStatusCode() === 412) {
+                return null;
+            }
+
+            return UnableToDeleteFile::atLocation($path, $throwable->getMessage(), $throwable);
+        }
+
+        return null;
     }
 
     private function filesystem(): AwsS3V3Adapter
@@ -300,20 +333,16 @@ class TemporaryUploads
     }
 
     private function rejectOversizedUpload(
+        string $bucket,
+        string $etag,
         AwsS3V3Adapter $filesystem,
         int $maximumSize,
         string $path,
         int $size,
     ): never {
-        $previous = null;
-
-        if (Config::deleteRejectedUploads()) {
-            try {
-                $filesystem->getDriver()->delete($path);
-            } catch (FilesystemException $exception) {
-                $previous = $exception;
-            }
-        }
+        $previous = Config::deleteRejectedUploads()
+            ? $this->deleteInspectedUpload($bucket, $etag, $filesystem, $path)
+            : null;
 
         throw UploadTooLargeException::forUpload($maximumSize, $path, $size, $previous);
     }

@@ -154,8 +154,9 @@ it('allows an empty file with a zero-byte override', function (): void {
     expect(TemporaryUploads::maxSize(0)->retrieve($this->path)->size)->toBe(0);
 });
 
-it('deletes oversized uploads when configured and retains the size error if deletion fails', function (
-    bool $fails,
+it('deletes only the oversized upload it inspected and retains the size error', function (
+    Closure $response,
+    null|string $previous,
 ): void {
     Config::set('temporary-uploads.delete_rejected_uploads', true);
 
@@ -165,15 +166,11 @@ it('deletes oversized uploads when configured and retains the size error if dele
             'ETag' => '"etag"',
             'LastModified' => CarbonImmutable::now(),
         ]),
-        $fails
-            ? new S3Exception('Denied', new Command('DeleteObject'), [
-                'response' => new Response(403),
-            ])
-            : new Result(),
+        $response(),
     );
 
     expect(fn () => TemporaryUploads::maxSize(10)->retrieve($this->path))
-        ->toThrow(function (UploadTooLargeException $exception) use ($fails): void {
+        ->toThrow(function (UploadTooLargeException $exception) use ($previous): void {
             expect($exception->maximumSize)->toBe(10)
                 ->and($exception->getMessage())->toBe(
                     "Temporary upload [{$this->path}] is 11 bytes, exceeding the 10-byte limit.",
@@ -181,15 +178,51 @@ it('deletes oversized uploads when configured and retains the size error if dele
                 ->and($exception->path)->toBe($this->path)
                 ->and($exception->size)->toBe(11);
 
-            if ($fails) {
-                expect($exception->getPrevious())->toBeInstanceOf(UnableToDeleteFile::class);
-            } else {
+            if ($previous === null) {
                 expect($exception->getPrevious())->toBeNull();
+            } else {
+                expect($exception->getPrevious())->toBeInstanceOf($previous);
             }
         })
         ->and($this->storage->getLastCommand()->getName())->toBe('DeleteObject')
+        ->and($this->storage->getLastCommand()['IfMatch'])->toBe('"etag"')
         ->and($this->storage->getLastCommand()['Key'])->toBe('application/'.$this->path);
-})->with([false, true]);
+})->with([
+    'deleted' => [fn (): Result => new Result(), null],
+    'failed' => [
+        fn (): S3Exception => new S3Exception('Denied', new Command('DeleteObject'), [
+            'response' => new Response(403),
+        ]),
+        UnableToDeleteFile::class,
+    ],
+    'replaced' => [
+        fn (): S3Exception => new S3Exception('Precondition Failed', new Command('DeleteObject'), [
+            'response' => new Response(412),
+        ]),
+        null,
+    ],
+]);
+
+it('does not delete oversized uploads from a read-only disk', function (): void {
+    Config::set('filesystems.disks.uploads.read-only', true);
+    Config::set('temporary-uploads.delete_rejected_uploads', true);
+    Storage::forgetDisk('uploads');
+
+    $this->storage->append(
+        new Result([
+            'ContentLength' => 11,
+            'ETag' => '"etag"',
+            'LastModified' => CarbonImmutable::now(),
+        ]),
+        new Result(),
+    );
+
+    expect(fn () => TemporaryUploads::maxSize(10)->retrieve($this->path))
+        ->toThrow(function (UploadTooLargeException $exception): void {
+            expect($exception->getPrevious())->toBeInstanceOf(UnableToDeleteFile::class);
+        })
+        ->and($this->storage->getLastCommand()->getName())->toBe('HeadObject');
+});
 
 it('rejects uploads at the retention boundary before cleanup', function (): void {
     Config::set('temporary-uploads.retention', 60);
