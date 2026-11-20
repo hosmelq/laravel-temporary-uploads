@@ -170,10 +170,17 @@ class TemporaryUploads
             );
         }
 
+        $etag = $metadata->get('ETag');
         $lastModified = $metadata->get('LastModified');
         $size = $metadata->get('ContentLength');
 
-        if (! $lastModified instanceof DateTimeInterface || ! is_int($size) || $size < 0) {
+        if (
+            ! is_string($etag)
+            || $etag === ''
+            || ! $lastModified instanceof DateTimeInterface
+            || ! is_int($size)
+            || $size < 0
+        ) {
             throw new UnexpectedValueException(
                 'Storage returned invalid temporary upload metadata.',
             );
@@ -194,6 +201,7 @@ class TemporaryUploads
 
         return new TemporaryFile(
             disk: Config::disk(),
+            etag: $etag,
             filename: basename($path),
             filesystem: $filesystem,
             lastModified: CarbonImmutable::instance($lastModified),

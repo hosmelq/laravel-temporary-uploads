@@ -120,9 +120,11 @@ fclose($stream);
 Save the files you want to keep outside the temporary prefix. Holding on to a
 path does not stop an upload from expiring.
 
-The size and expiration checks describe the file at the moment it was
-retrieved. The upload URL can overwrite the file until the URL expires, so read
-the contents right after retrieving it.
+`contents()` and `readStream()` only read the file that was retrieved. The
+upload URL can overwrite the file until the URL expires; if the file changes or
+is deleted after retrieval, they throw `League\Flysystem\UnableToReadFile`
+instead of returning content that skipped the size check. Retrieve the path
+again to check the new file.
 
 ## Limit file size
 

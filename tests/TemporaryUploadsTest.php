@@ -77,6 +77,7 @@ it('retrieves metadata in one request without downloading the file', function ()
 
     $this->storage->append(new Result([
         'ContentLength' => 1_024,
+        'ETag' => '"etag"',
         'LastModified' => $lastModified,
         'Metadata' => ['original-name' => base64_encode('Factura original.pdf')],
     ]));
@@ -98,6 +99,7 @@ it('retrieves metadata in one request without downloading the file', function ()
 it('accepts uploads without usable original-name metadata', function (array $metadata): void {
     $this->storage->append(new Result([
         'ContentLength' => 0,
+        'ETag' => '"etag"',
         'LastModified' => CarbonImmutable::now(),
         'Metadata' => $metadata,
     ]));
@@ -114,9 +116,21 @@ it('accepts the size limit and isolates per-call overrides', function (): void {
     Config::set('temporary-uploads.max_size', 10);
 
     $this->storage->append(
-        new Result(['ContentLength' => 10, 'LastModified' => CarbonImmutable::now()]),
-        new Result(['ContentLength' => 11, 'LastModified' => CarbonImmutable::now()]),
-        new Result(['ContentLength' => 11, 'LastModified' => CarbonImmutable::now()]),
+        new Result([
+            'ContentLength' => 10,
+            'ETag' => '"etag"',
+            'LastModified' => CarbonImmutable::now(),
+        ]),
+        new Result([
+            'ContentLength' => 11,
+            'ETag' => '"etag"',
+            'LastModified' => CarbonImmutable::now(),
+        ]),
+        new Result([
+            'ContentLength' => 11,
+            'ETag' => '"etag"',
+            'LastModified' => CarbonImmutable::now(),
+        ]),
     );
 
     expect(TemporaryUploads::retrieve($this->path)->size)->toBe(10)
@@ -130,7 +144,11 @@ it('accepts the size limit and isolates per-call overrides', function (): void {
 
 it('allows an empty file with a zero-byte override', function (): void {
     $this->storage->append(
-        new Result(['ContentLength' => 0, 'LastModified' => CarbonImmutable::now()]),
+        new Result([
+            'ContentLength' => 0,
+            'ETag' => '"etag"',
+            'LastModified' => CarbonImmutable::now(),
+        ]),
     );
 
     expect(TemporaryUploads::maxSize(0)->retrieve($this->path)->size)->toBe(0);
@@ -142,7 +160,11 @@ it('deletes oversized uploads when configured and retains the size error if dele
     Config::set('temporary-uploads.delete_rejected_uploads', true);
 
     $this->storage->append(
-        new Result(['ContentLength' => 11, 'LastModified' => CarbonImmutable::now()]),
+        new Result([
+            'ContentLength' => 11,
+            'ETag' => '"etag"',
+            'LastModified' => CarbonImmutable::now(),
+        ]),
         $fails
             ? new S3Exception('Denied', new Command('DeleteObject'), [
                 'response' => new Response(403),
@@ -174,6 +196,7 @@ it('rejects uploads at the retention boundary before cleanup', function (): void
 
     $this->storage->append(new Result([
         'ContentLength' => 1,
+        'ETag' => '"etag"',
         'LastModified' => CarbonImmutable::now()->subSeconds(60),
     ]));
 
@@ -191,6 +214,7 @@ it('accepts uploads until the retention boundary', function (): void {
 
     $this->storage->append(new Result([
         'ContentLength' => 1,
+        'ETag' => '"etag"',
         'LastModified' => CarbonImmutable::now()->subSeconds(59),
     ]));
 
@@ -236,7 +260,11 @@ it('supports nested unicode prefixes and counts storage keys in bytes', function
     $upload = TemporaryUploads::create('Factura.pdf');
 
     $this->storage->append(
-        new Result(['ContentLength' => 1, 'LastModified' => CarbonImmutable::now()]),
+        new Result([
+            'ContentLength' => 1,
+            'ETag' => '"etag"',
+            'LastModified' => CarbonImmutable::now(),
+        ]),
     );
 
     expect(TemporaryUploads::retrieve($upload->path)->path)->toBe($upload->path);
@@ -277,7 +305,7 @@ it('requires an S3-compatible disk', function (): void {
     );
 });
 
-it('fails when storage cannot supply valid size and modification metadata', function (
+it('fails when storage cannot supply valid version, size and modification metadata', function (
     array $metadata,
 ): void {
     $this->storage->append(new Result($metadata));
@@ -286,9 +314,14 @@ it('fails when storage cannot supply valid size and modification metadata', func
         UnexpectedValueException::class,
     );
 })->with([
-    'missing size' => [['LastModified' => CarbonImmutable::now()]],
-    'missing timestamp' => [['ContentLength' => 1]],
-    'negative size' => [['ContentLength' => -1, 'LastModified' => CarbonImmutable::now()]],
+    'missing etag' => [['ContentLength' => 1, 'LastModified' => CarbonImmutable::now()]],
+    'missing size' => [['ETag' => '"etag"', 'LastModified' => CarbonImmutable::now()]],
+    'missing timestamp' => [['ETag' => '"etag"', 'ContentLength' => 1]],
+    'negative size' => [[
+        'ContentLength' => -1,
+        'ETag' => '"etag"',
+        'LastModified' => CarbonImmutable::now(),
+    ]],
 ]);
 
 it('prunes expired uploads across storage pages while preserving other files', function (): void {

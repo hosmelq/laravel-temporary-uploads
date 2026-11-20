@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 - Require Laravel 13.
+- Read only the file that `retrieve()` checked, so an upload replaced after retrieval can no longer bypass the size limit. `TemporaryFile` now needs an S3 disk and the object's ETag.
 
 ## v1.0.0 - 2026-10-05
 
